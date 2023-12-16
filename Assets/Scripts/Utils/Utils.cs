@@ -11,8 +11,17 @@ public static class Utils
             trans.gameObject.layer = layerNumber;
         }
     }
-    public static Vector3 GetRandomPositionAtCertainPoint(Vector3 point, float range = 2f)
+    public static void SetMouseLockedState(bool locked)
     {
-        return new Vector3(Random.Range(point.x - range, point.x + range), point.y, Random.Range(point.z - range, point.z + range));
+        if (locked)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
     }
 }

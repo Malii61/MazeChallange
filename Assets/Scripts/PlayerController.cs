@@ -8,7 +8,6 @@ using UnityEngine.InputSystem.XR;
 public class PlayerController : MonoBehaviour
 {
     [SerializeField] private float _sprintSpeed, _walkSpeed, _smoothTime, _mouseSensitivity, _jumpForce;
-    [SerializeField] private PlayerAnimator _playerAnimator;
     private bool _isGrounded;
     private Vector3 smoothMoveVelocity;
     private Vector3 moveAmount;
@@ -17,7 +16,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] Transform _playerModel;
     [SerializeField] private CinemachineVirtualCamera fpsCam;
     [SerializeField] private CinemachineVirtualCamera tpsCam;
-    [SerializeField] private Camera cam;
+    private Camera cam;
     private Vector3 stopPl = Vector3.zero;
     private Rigidbody _rigidbody;
     [SerializeField] private GameObject _cinemachineCameraTarget;
@@ -25,32 +24,103 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float _speedChangingSmoothness = 5f;
     [SerializeField] private Animator _animator;
     [SerializeField] private GroundChecker groundChecker;
-    private Vector3 spawnPosition;
+    private Vector3 _spawnPosition;
+    private bool _isMovable = true;
     //tps cam rotation
     private float _cinemachineTargetYaw = 0;
     private float _cinemachineTargetPitch = 0;
     private float TopClamp = 70.0f;
     private float BottomClamp = -30.0f;
     private float CameraAngleOverride = 0.0f;
-
+    private bool isFpsEnabled;
     // animation IDs
     private int _animIDGrounded;
     private int _animIDJump;
+    private int _animIDSpeed;
     private bool isJumped;
+
+    // shader effect
+    private List<Material> _materials = new();
+    private bool _isShaderEffectOn;
+    private float _shaderEffectCurrentValue;
+    private float _shaderEffectValueTarget;
+
     private void Awake()
     {
-        spawnPosition = transform.position;
+        _spawnPosition = transform.position;
         _rigidbody = GetComponent<Rigidbody>();
+        foreach (var renderer in GetComponentsInChildren<SkinnedMeshRenderer>())
+        {
+            _materials.Add(renderer.material);
+        }
     }
     private void Start()
     {
-        if (cam == null)
-            cam = Camera.main;
+        Utils.SetMouseLockedState(true);
+        cam = Camera.main;
         AssignAnimationIDs();
         GameInput.Instance.OnChangeCam += GameInput_OnChangeCam;
+        GameManager.Instance.OnStateChanged += GameManager_OnStateChanged;
+    }
+
+    private void GameManager_OnStateChanged(object sender, GameManager.OnStateChangedEventArgs e)
+    {
+        switch (e.CurrentState)
+        {
+            case GameManager.State.GameStarted:
+                transform.position = _spawnPosition;
+                _shaderEffectValueTarget = -1.0f;
+                _isShaderEffectOn = true;
+                _isMovable = true;
+                Debug.Log("start isFpsEnabled: " + isFpsEnabled);
+                if (isFpsEnabled)
+                {
+                    //switch back to camera mode to preferred one by player
+                    SwitchCameraMode();
+                }
+                break;
+
+            case GameManager.State.GameOver:
+                isFpsEnabled = fpsCam.enabled;
+                Debug.Log("isFpsEnabled: " + isFpsEnabled);
+                if (isFpsEnabled)
+                {
+                    //switch camera mode to fps to see the dissolve effect
+                    SwitchCameraMode();
+                }
+                _shaderEffectValueTarget = 1.0f;
+                _isShaderEffectOn = true;
+                _isMovable = false;
+                break;
+        }
+    }
+    // show player destroy effect on die and respawn effect on repositioned
+    private void ChangeMaterialDissolveProperty()
+    {
+        if (!_isShaderEffectOn)
+        {
+            return;
+        }
+
+        _shaderEffectCurrentValue = Mathf.Lerp(_shaderEffectCurrentValue, _shaderEffectValueTarget, Time.deltaTime * 2f);
+
+        foreach (var material in _materials)
+        {
+            material.SetFloat("dissolveAmount", _shaderEffectCurrentValue);
+        }
+
+        if (Mathf.Abs((float)System.Math.Round(_shaderEffectCurrentValue, 1)) >= Mathf.Abs((float)System.Math.Round(_shaderEffectValueTarget, 1)))
+        {
+            _isShaderEffectOn = false;
+            if (_shaderEffectValueTarget == 1.0f)
+            {
+                GameManager.Instance.ChangeState(GameManager.State.GameStarted);
+            }
+        }
     }
     private void Update()
     {
+        ChangeMaterialDissolveProperty();
         Jump();
     }
     private void FixedUpdate()
@@ -61,30 +131,37 @@ public class PlayerController : MonoBehaviour
     {
         CameraRotation();
     }
+    private void OnDestroy()
+    {
+        GameInput.Instance.OnChangeCam -= GameInput_OnChangeCam;
+        GameManager.Instance.OnStateChanged -= GameManager_OnStateChanged;
+    }
     private void GameInput_OnChangeCam(object sender, System.EventArgs e)
     {
         if (EventSystem.current.currentSelectedGameObject)
             return;
-
-        else if (GameInput.Instance.GetInputActions().Player.ChangeCam.triggered)
-        {
-            fpsCam.enabled = !fpsCam.isActiveAndEnabled;
-            tpsCam.enabled = !tpsCam.isActiveAndEnabled;
-            int layer = tpsCam.enabled ? LayerFinder.GetIndex(Layer.Default) : LayerFinder.GetIndex(Layer.Unvisible);
-            Utils.SetRenderLayerInChildren(_playerModel, layer);
-        }
+        SwitchCameraMode();
+    }
+    private void SwitchCameraMode()
+    {
+        fpsCam.enabled = !fpsCam.isActiveAndEnabled;
+        tpsCam.enabled = !tpsCam.isActiveAndEnabled;
+        int layer = tpsCam.enabled ? LayerFinder.GetIndex(Layer.Default) : LayerFinder.GetIndex(Layer.Unvisible);
+        Debug.Log(layer);
+        Utils.SetRenderLayerInChildren(_playerModel, layer);
     }
     private void AssignAnimationIDs()
     {
         _animIDGrounded = Animator.StringToHash("Grounded");
         _animIDJump = Animator.StringToHash("Jump");
+        _animIDSpeed = Animator.StringToHash("Speed");
     }
     private void Move()
     {
-        if (EventSystem.current.currentSelectedGameObject)
+        if (EventSystem.current.currentSelectedGameObject || !_isMovable)
         {
             moveAmount = stopPl;
-            //_animator.SetFloat("Speed", 0);
+            _animator.SetFloat(_animIDSpeed, 0);
             return;
         }
 
@@ -111,7 +188,7 @@ public class PlayerController : MonoBehaviour
             moveAmount = Vector3.SmoothDamp(moveAmount, moveDir * _walkSpeed, ref smoothMoveVelocity, _smoothTime);
         }
         _speed = Mathf.Lerp(_speed, moveAmount.magnitude, Time.fixedDeltaTime * _speedChangingSmoothness);
-        _animator.SetFloat("Speed", _speed);
+        _animator.SetFloat(_animIDSpeed, _speed);
         //Rotation
         if (tpsCam.isActiveAndEnabled)
         {
@@ -135,15 +212,12 @@ public class PlayerController : MonoBehaviour
     {
         if (transform.position.y < -12)
         {
-            Teleport(spawnPosition);
+            Teleport(_spawnPosition);
         }
     }
-    public void Teleport(Vector3 pos, Quaternion rot = default)
+    public void Teleport(Vector3 pos)
     {
-        if (rot == default)
-            rot = Quaternion.identity;
         transform.position = pos;
-        _playerModel.transform.rotation = rot;
     }
     private void CameraRotation()
     {

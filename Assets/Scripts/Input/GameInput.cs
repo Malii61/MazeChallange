@@ -7,7 +7,8 @@ public class GameInput : MonoBehaviour
 
     private InputActions inputActions;
 
-    public event EventHandler OnChangeCam; 
+    public event EventHandler OnChangeCam;
+    public event EventHandler OnOpenedOrClosedPanel;
     private void Awake()
     {
         if (!Instance)
@@ -18,7 +19,14 @@ public class GameInput : MonoBehaviour
         inputActions.Player.Enable();
 
         inputActions.Player.ChangeCam.performed += ChangeCam_performed;
+        inputActions.Player.OpenClosePanel.performed += OpenClosePanel_performed;
     }
+
+    private void OpenClosePanel_performed(InputAction.CallbackContext obj)
+    {
+        OnOpenedOrClosedPanel?.Invoke(this, EventArgs.Empty);
+    }
+
     private void ChangeCam_performed(InputAction.CallbackContext obj)
     {
         OnChangeCam?.Invoke(this, EventArgs.Empty);
@@ -27,6 +35,7 @@ public class GameInput : MonoBehaviour
     private void OnDestroy()
     {
         inputActions.Player.ChangeCam.performed -= ChangeCam_performed;
+        inputActions.Player.OpenClosePanel.performed -= OpenClosePanel_performed;
         inputActions.Dispose();
     }
     public InputActions GetInputActions()
