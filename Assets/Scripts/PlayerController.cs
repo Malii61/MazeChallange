@@ -3,40 +3,42 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.XR;
 
 public class PlayerController : MonoBehaviour
 {
+    #region Variables
     [SerializeField] private float _sprintSpeed, _walkSpeed, _smoothTime, _mouseSensitivity, _jumpForce;
-    private bool _isGrounded;
-    private Vector3 smoothMoveVelocity;
-    private Vector3 moveAmount;
-    [Tooltip("What layers the character uses as ground")]
     [SerializeField] LayerMask _groundLayers;
     [SerializeField] Transform _playerModel;
     [SerializeField] private CinemachineVirtualCamera fpsCam;
     [SerializeField] private CinemachineVirtualCamera tpsCam;
-    private Camera cam;
-    private Vector3 stopPl = Vector3.zero;
-    private Rigidbody _rigidbody;
     [SerializeField] private GameObject _cinemachineCameraTarget;
-    private float _speed;
     [SerializeField] private float _speedChangingSmoothness = 5f;
     [SerializeField] private Animator _animator;
-    [SerializeField] private GroundChecker groundChecker;
+    [SerializeField] private GroundChecker groundChecker; private Camera cam;
+
+    private Vector3 stopPl = Vector3.zero;
+    private Rigidbody _rigidbody;
+    private float _speed;
     private Vector3 _spawnPosition;
     private bool _isMovable = true;
+    private bool _isGrounded;
+    private Vector3 smoothMoveVelocity;
+    private Vector3 moveAmount;
+    private bool isFpsEnabled;
+
     //tps cam rotation
     private float _cinemachineTargetYaw = 0;
     private float _cinemachineTargetPitch = 0;
     private float TopClamp = 70.0f;
     private float BottomClamp = -30.0f;
     private float CameraAngleOverride = 0.0f;
-    private bool isFpsEnabled;
+
     // animation IDs
     private int _animIDGrounded;
     private int _animIDJump;
     private int _animIDSpeed;
+
     private bool isJumped;
 
     // shader effect
@@ -44,11 +46,12 @@ public class PlayerController : MonoBehaviour
     private bool _isShaderEffectOn;
     private float _shaderEffectCurrentValue;
     private float _shaderEffectValueTarget;
-
+    #endregion
     private void Awake()
     {
         _spawnPosition = transform.position;
         _rigidbody = GetComponent<Rigidbody>();
+        // Get all the materials from the player model
         foreach (var renderer in GetComponentsInChildren<SkinnedMeshRenderer>())
         {
             _materials.Add(renderer.material);
@@ -94,7 +97,7 @@ public class PlayerController : MonoBehaviour
                 break;
         }
     }
-    // show player destroy effect on die and respawn effect on repositioned
+    // show player destroy effect on die or respawn effect on repositioned
     private void ChangeMaterialDissolveProperty()
     {
         if (!_isShaderEffectOn)
@@ -147,7 +150,7 @@ public class PlayerController : MonoBehaviour
         fpsCam.enabled = !fpsCam.isActiveAndEnabled;
         tpsCam.enabled = !tpsCam.isActiveAndEnabled;
         int layer = tpsCam.enabled ? LayerFinder.GetIndex(Layer.Default) : LayerFinder.GetIndex(Layer.Unvisible);
-        Debug.Log(layer);
+        //Make player unvisible on fps camera for better result
         Utils.SetRenderLayerInChildren(_playerModel, layer);
     }
     private void AssignAnimationIDs()
@@ -171,12 +174,11 @@ public class PlayerController : MonoBehaviour
         Vector3 forward = cam.transform.forward;
         Vector3 right = cam.transform.right;
 
-        forward.y = 0f; // Y ekseni üzerindeki dönüþü önlemek için sýfýrlayýn.
+        forward.y = 0f; 
         right.y = 0f;
 
         Vector3 moveDir = (forward * movement.y + right * movement.x).normalized;
 
-        // Yerçekimi etkisi olmasýn
         moveDir.y = 0f;
 
         if (GameInput.Instance.GetInputActions().Player.Sprint.IsPressed())
@@ -189,6 +191,7 @@ public class PlayerController : MonoBehaviour
         }
         _speed = Mathf.Lerp(_speed, moveAmount.magnitude, Time.fixedDeltaTime * _speedChangingSmoothness);
         _animator.SetFloat(_animIDSpeed, _speed);
+
         //Rotation
         if (tpsCam.isActiveAndEnabled)
         {
@@ -223,7 +226,7 @@ public class PlayerController : MonoBehaviour
     {
         _cinemachineTargetYaw += GameInput.Instance.GetMouseLook().x * _mouseSensitivity;
         _cinemachineTargetPitch += -GameInput.Instance.GetMouseLook().y * _mouseSensitivity;
-        // clamp our rotations so our values are limited 360 degrees
+        // clamp our rotations so our values are limited to 360 degrees
         _cinemachineTargetYaw = ClampAngle(_cinemachineTargetYaw, float.MinValue, float.MaxValue);
         _cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
         _cinemachineCameraTarget.transform.rotation = Quaternion.Euler(_cinemachineTargetPitch + CameraAngleOverride,
@@ -239,12 +242,14 @@ public class PlayerController : MonoBehaviour
             if (GameInput.Instance.IsJumpButtonPressed())
             {
                 isJumped = true;
+                // apply jump force
                 _rigidbody.AddForce(transform.up * _jumpForce, ForceMode.Impulse);
 
                 _animator.SetBool(_animIDJump, true);
             }
             else if (isJumped)
             {
+                // player jumped and also grounded so set the jumped bool to false
                 _animator.SetBool(_animIDJump, false);
                 isJumped = false;
             }

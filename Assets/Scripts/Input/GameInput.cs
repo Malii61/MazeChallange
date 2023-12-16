@@ -58,6 +58,5 @@ public class GameInput : MonoBehaviour
     {
         Vector2 lookVector = inputActions.Player.MouseLook.ReadValue<Vector2>();
         return lookVector;
-
     }
 }

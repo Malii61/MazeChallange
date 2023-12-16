@@ -29,7 +29,7 @@ public class GameCanvasUI : MonoBehaviour
                 ChangeActivityOfTransform(gameOverUI, true, 1f);
                 break;
             case GameManager.State.GameFinished:
-                ChangeActivityOfTransform(gameFinishedUI, true, 3f);
+                ChangeActivityOfTransform(gameFinishedUI, true, 2f);
                 break;
         }
     }
@@ -46,6 +46,7 @@ public class GameCanvasUI : MonoBehaviour
         yield return delay;
         t.gameObject.SetActive(isActive);
 
+        //if the game finished successfully go back to the menu scene
         if (t == gameFinishedUI)
             UnityEngine.SceneManagement.SceneManager.LoadScene(0);
     }

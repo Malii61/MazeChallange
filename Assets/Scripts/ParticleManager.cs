@@ -25,9 +25,10 @@ public class ParticleManager : MonoBehaviour
         if (rot == default)
             rot = Quaternion.identity;
 
+        // Create particle at given position. (The particle could also be taken from the pool for better performance) 
         Instantiate(GetParticle(particleType), pos, rot);
     }
-
+    // Find particle by type
     private ParticleSystem GetParticle(ParticleType particleType)
     {
         return particleArgs.Where(x => x.particleType == particleType).FirstOrDefault().particle;
